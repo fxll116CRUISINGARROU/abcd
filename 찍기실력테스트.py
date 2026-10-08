@@ -76,11 +76,16 @@ def login_user(username, password):
     return True, "로그인 성공!"
 
 def save_score(username, score, accuracy):
-    scores = load_scores()
-    if username not in scores:
-        scores[username] = []
-    scores[username].append({"score": score, "accuracy": accuracy})
-    save_scores(scores)
+    try:
+        scores = load_scores()
+        if username not in scores:
+            scores[username] = []
+        scores[username].append({"score": score, "accuracy": accuracy})
+        save_scores(scores)
+        return True
+    except Exception as e:
+        st.error(f"점수 저장 오류: {e}")
+        return False
 
 def get_ranking():
     scores = load_scores()
@@ -136,6 +141,7 @@ if "questions" not in st.session_state:
     st.session_state.username = None
     st.session_state.current_question_index = 0
     st.session_state.answered_questions = set()
+    st.session_state.score_saved = False
 
 def generate_questions():
     """10개의 랜덤 문제 생성"""
@@ -322,9 +328,10 @@ else:
         accuracy = (correct_count / 10) * 100
 
         # 점수 저장 (한 번만)
-        if "score_saved" not in st.session_state:
+        if not st.session_state.score_saved:
             save_score(st.session_state.username, st.session_state.score, accuracy)
             st.session_state.score_saved = True
+            st.rerun()  # 저장 후 재실행해서 랭킹 즉시 업데이트
 
         col1, col2, col3 = st.columns(3)
         with col1:
