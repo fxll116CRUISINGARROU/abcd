@@ -97,46 +97,6 @@ def get_ranking():
             })
     return sorted(ranking, key=lambda x: x["best_score"], reverse=True)
 
-# 초기화
-if "questions" not in st.session_state:
-    st.session_state.questions = []
-    st.session_state.answers = [None] * 10
-    st.session_state.score = 0
-    st.session_state.combo = 0
-    st.session_state.current_multiplier = 1
-    st.session_state.test_started = False
-    st.session_state.test_finished = False
-    st.session_state.logged_in = False
-    st.session_state.username = None
-    st.session_state.show_login = True
-
-def generate_questions():
-    """10개의 랜덤 문제 생성"""
-    questions = []
-    for i in range(10):
-        # 정답 위치를 랜덤으로 결정 (0-9)
-        correct_index = random.randint(0, 9)
-
-        # 선택지 생성 (1-10번)
-        choices = [f"{j+1}번" for j in range(10)]
-
-        questions.append({
-            "number": i + 1,
-            "correct_answer": correct_index,
-            "choices": choices
-        })
-
-    return questions
-
-def calculate_score(is_correct):
-    """점수 계산"""
-    if is_correct:
-        st.session_state.combo += 1
-        points = 1 * (2 ** (st.session_state.combo - 1))
-        st.session_state.score += points
-    else:
-        st.session_state.combo = 0
-
 def display_ranking():
     """랭킹 표시"""
     st.subheader("🏆 전체 랭킹")
@@ -163,6 +123,32 @@ def display_ranking():
                 st.write(f"시도: {rank['attempts']}회")
     else:
         st.info("아직 기록이 없습니다.")
+
+# 초기화
+if "questions" not in st.session_state:
+    st.session_state.questions = []
+    st.session_state.answers = [None] * 10
+    st.session_state.score = 0
+    st.session_state.combo = 0
+    st.session_state.test_started = False
+    st.session_state.test_finished = False
+    st.session_state.logged_in = False
+    st.session_state.username = None
+    st.session_state.current_question_index = 0
+    st.session_state.answered_questions = set()
+
+def generate_questions():
+    """10개의 랜덤 문제 생성"""
+    questions = []
+    for i in range(10):
+        correct_index = random.randint(0, 9)
+        choices = [f"{j+1}번" for j in range(10)]
+        questions.append({
+            "number": i + 1,
+            "correct_answer": correct_index,
+            "choices": choices
+        })
+    return questions
 
 # 로그인/회원가입 UI
 if not st.session_state.logged_in:
@@ -234,105 +220,157 @@ else:
             if st.button("테스트 시작", use_container_width=True):
                 st.session_state.questions = generate_questions()
                 st.session_state.test_started = True
+                st.session_state.answers = [None] * 10
+                st.session_state.score = 0
+                st.session_state.combo = 0
+                st.session_state.current_question_index = 0
+                st.session_state.answered_questions = set()
                 st.rerun()
-    else:
+    elif not st.session_state.test_finished:
+        # 테스트 진행 중 - 한 문제씩 표시
+        current_q_idx = st.session_state.current_question_index
+        q = st.session_state.questions[current_q_idx]
+
         # 진행 상황 표시
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("현재 점수", st.session_state.score)
         with col2:
             st.metric("연속 정답", st.session_state.combo)
         with col3:
             st.metric("점수 배수", f"x{2**st.session_state.combo}")
+        with col4:
+            st.metric("진행도", f"{current_q_idx + 1}/10")
 
         st.divider()
 
         # 문제 표시
-        for i, q in enumerate(st.session_state.questions):
-            with st.container(border=True):
-                st.markdown(f"### 문제 {q['number']}/10")
+        st.markdown(f"### 📌 문제 {q['number']}/10")
 
-                # 선택지 표시
-                selected = st.radio(
-                    "정답을 선택하세요:",
-                    options=range(10),
-                    format_func=lambda x: q['choices'][x],
-                    key=f"q_{i}",
-                    horizontal=True,
-                    label_visibility="collapsed"
-                )
-
-                # 답안 저장
-                st.session_state.answers[i] = selected
+        # 이미 답변한 경우
+        if current_q_idx in st.session_state.answered_questions:
+            st.info(f"✅ 이미 답변했습니다: {q['choices'][st.session_state.answers[current_q_idx]]}")
+            selected = st.session_state.answers[current_q_idx]
+            can_select = False
+        else:
+            # 선택지 표시
+            selected = st.radio(
+                "정답을 선택하세요:",
+                options=range(10),
+                format_func=lambda x: q['choices'][x],
+                key=f"q_{current_q_idx}",
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+            can_select = True
 
         st.divider()
 
-        # 제출 버튼
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("제출", use_container_width=True):
-                # 답변 체크
-                for i, q in enumerate(st.session_state.questions):
-                    is_correct = st.session_state.answers[i] == q['correct_answer']
-                    calculate_score(is_correct)
+        # 버튼
+        col1, col2, col3 = st.columns(3)
 
+        with col1:
+            if current_q_idx > 0:
+                if st.button("◀ 이전", use_container_width=True):
+                    st.session_state.current_question_index -= 1
+                    st.rerun()
+
+        with col2:
+            if can_select:
+                if st.button("답변 및 다음 →", use_container_width=True):
+                    # 답변 저장
+                    st.session_state.answers[current_q_idx] = selected
+                    st.session_state.answered_questions.add(current_q_idx)
+
+                    # 점수 계산 (실시간)
+                    is_correct = selected == q['correct_answer']
+                    if is_correct:
+                        st.session_state.combo += 1
+                        points = 1 * (2 ** (st.session_state.combo - 1))
+                        st.session_state.score += points
+                    else:
+                        st.session_state.combo = 0
+
+                    # 다음 문제로 이동 또는 완료
+                    if current_q_idx < 9:
+                        st.session_state.current_question_index += 1
+                    else:
+                        st.session_state.test_finished = True
+
+                    st.rerun()
+            else:
+                if st.button("다음 →", use_container_width=True):
+                    if current_q_idx < 9:
+                        st.session_state.current_question_index += 1
+                    else:
+                        st.session_state.test_finished = True
+                    st.rerun()
+
+        with col3:
+            if st.button("테스트 종료", use_container_width=True):
                 st.session_state.test_finished = True
                 st.rerun()
 
-# 결과 표시
-if st.session_state.test_finished and st.session_state.test_started:
-    st.success("테스트 완료!")
+    # 결과 표시
+    if st.session_state.test_finished:
+        st.success("🎉 테스트 완료!")
 
-    correct_count = sum(
-        1 for i, q in enumerate(st.session_state.questions)
-        if st.session_state.answers[i] == q['correct_answer']
-    )
-    accuracy = (correct_count / 10) * 100
+        correct_count = sum(
+            1 for i, q in enumerate(st.session_state.questions)
+            if st.session_state.answers[i] == q['correct_answer']
+        )
+        accuracy = (correct_count / 10) * 100
 
-    # 점수 저장
-    save_score(st.session_state.username, st.session_state.score, accuracy)
+        # 점수 저장 (한 번만)
+        if "score_saved" not in st.session_state:
+            save_score(st.session_state.username, st.session_state.score, accuracy)
+            st.session_state.score_saved = True
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("최종 점수", st.session_state.score)
-    with col2:
-        st.metric("정답 개수", f"{correct_count}/10")
-    with col3:
-        st.metric("정확도", f"{accuracy:.1f}%")
-
-    st.divider()
-
-    # 상세 결과
-    st.subheader("상세 결과")
-    for i, q in enumerate(st.session_state.questions):
-        is_correct = st.session_state.answers[i] == q['correct_answer']
-        status = "✅ 정답" if is_correct else "❌ 오답"
-
-        col1, col2, col3 = st.columns([1, 3, 3])
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.write(f"문제 {q['number']}")
+            st.metric("최종 점수", st.session_state.score)
         with col2:
-            st.write(f"선택: {q['choices'][st.session_state.answers[i]]}")
+            st.metric("정답 개수", f"{correct_count}/10")
         with col3:
-            st.write(f"정답: {q['choices'][q['correct_answer']]} {status}")
+            st.metric("정확도", f"{accuracy:.1f}%")
 
-    st.divider()
+        st.divider()
 
-    # 버튼
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("다시 시작", use_container_width=True):
-            st.session_state.questions = []
-            st.session_state.answers = [None] * 10
-            st.session_state.score = 0
-            st.session_state.combo = 0
-            st.session_state.test_started = False
-            st.session_state.test_finished = False
-            st.rerun()
-    with col2:
-        if st.button("로그아웃", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.session_state.test_started = False
-            st.session_state.test_finished = False
-            st.rerun()
+        # 상세 결과
+        st.subheader("📋 상세 결과")
+        for i, q in enumerate(st.session_state.questions):
+            is_correct = st.session_state.answers[i] == q['correct_answer']
+            status = "✅ 정답" if is_correct else "❌ 오답"
+
+            col1, col2, col3 = st.columns([1, 3, 3])
+            with col1:
+                st.write(f"문제 {q['number']}")
+            with col2:
+                st.write(f"선택: {q['choices'][st.session_state.answers[i]]}")
+            with col3:
+                st.write(f"정답: {q['choices'][q['correct_answer']]} {status}")
+
+        st.divider()
+
+        # 버튼
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("다시 시작", use_container_width=True):
+                st.session_state.questions = []
+                st.session_state.answers = [None] * 10
+                st.session_state.score = 0
+                st.session_state.combo = 0
+                st.session_state.test_started = False
+                st.session_state.test_finished = False
+                st.session_state.current_question_index = 0
+                st.session_state.answered_questions = set()
+                st.session_state.score_saved = False
+                st.rerun()
+        with col2:
+            if st.button("로그아웃", use_container_width=True):
+                st.session_state.logged_in = False
+                st.session_state.username = None
+                st.session_state.test_started = False
+                st.session_state.test_finished = False
+                st.session_state.score_saved = False
+                st.rerun()
