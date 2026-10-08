@@ -8,34 +8,56 @@ import hashlib
 st.set_page_config(page_title="찍기 실력 테스트", layout="centered")
 st.title("🎯 찍기 실력 테스트")
 
-# 데이터 폴더 설정
-DATA_DIR = Path("user_data")
+# 데이터 폴더 설정 (절대경로)
+DATA_DIR = Path(__file__).parent / "user_data"
 DATA_DIR.mkdir(exist_ok=True)
 USERS_FILE = DATA_DIR / "users.json"
 SCORES_FILE = DATA_DIR / "scores.json"
+
+# 디버그 정보 (개발용)
+with st.sidebar:
+    with st.expander("📊 데이터 저장 상태", expanded=False):
+        st.write(f"**데이터 폴더:**")
+        st.code(str(DATA_DIR))
+        if USERS_FILE.exists():
+            st.write("✅ 사용자 데이터 파일 존재")
+        if SCORES_FILE.exists():
+            st.write("✅ 점수 데이터 파일 존재")
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def load_users():
-    if USERS_FILE.exists():
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
+    try:
+        if USERS_FILE.exists():
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        st.warning(f"사용자 데이터 로드 오류: {e}")
     return {}
 
 def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f, indent=2)
+    try:
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(users, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        st.error(f"사용자 데이터 저장 오류: {e}")
 
 def load_scores():
-    if SCORES_FILE.exists():
-        with open(SCORES_FILE, "r") as f:
-            return json.load(f)
+    try:
+        if SCORES_FILE.exists():
+            with open(SCORES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        st.warning(f"점수 데이터 로드 오류: {e}")
     return {}
 
 def save_scores(scores):
-    with open(SCORES_FILE, "w") as f:
-        json.dump(scores, f, indent=2)
+    try:
+        with open(SCORES_FILE, "w", encoding="utf-8") as f:
+            json.dump(scores, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        st.error(f"점수 데이터 저장 오류: {e}")
 
 def register_user(username, password):
     users = load_users()
