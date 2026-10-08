@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import hashlib
+from datetime import datetime
 
 st.set_page_config(page_title="찍기 실력 테스트", layout="centered")
 st.title("🎯 찍기 실력 테스트")
@@ -80,7 +81,11 @@ def save_score(username, score, accuracy):
         scores = load_scores()
         if username not in scores:
             scores[username] = []
-        scores[username].append({"score": score, "accuracy": accuracy})
+        scores[username].append({
+            "score": score,
+            "accuracy": accuracy,
+            "timestamp": datetime.now().isoformat()
+        })
         save_scores(scores)
         return True
     except Exception as e:
@@ -94,13 +99,20 @@ def get_ranking():
         if score_list:
             best_score = max([s["score"] for s in score_list])
             avg_accuracy = sum([s["accuracy"] for s in score_list]) / len(score_list)
+            # 첫 시도 시간 (가장 오래된 시도)
+            first_attempt_time = score_list[0].get("timestamp", "")
             ranking.append({
                 "username": username,
                 "best_score": best_score,
                 "avg_accuracy": avg_accuracy,
-                "attempts": len(score_list)
+                "attempts": len(score_list),
+                "first_attempt_time": first_attempt_time
             })
-    return sorted(ranking, key=lambda x: x["best_score"], reverse=True)
+    # 정렬 기준: 1) 최고점 (높음), 2) 평균정확도 (높음), 3) 첫시도시간 (빠름)
+    return sorted(
+        ranking,
+        key=lambda x: (-x["best_score"], -x["avg_accuracy"], x["first_attempt_time"])
+    )
 
 def display_ranking():
     """랭킹 표시"""
