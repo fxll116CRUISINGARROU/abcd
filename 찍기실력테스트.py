@@ -20,10 +20,35 @@ with st.sidebar:
     with st.expander("📊 데이터 저장 상태", expanded=False):
         st.write(f"**데이터 폴더:**")
         st.code(str(DATA_DIR))
-        if USERS_FILE.exists():
+
+        # 파일 존재 여부
+        users_exists = USERS_FILE.exists()
+        scores_exists = SCORES_FILE.exists()
+
+        if users_exists:
             st.write("✅ 사용자 데이터 파일 존재")
-        if SCORES_FILE.exists():
+            try:
+                users_data = load_users()
+                st.write(f"   회원수: {len(users_data)}명")
+            except:
+                st.write("   ⚠️ 파일 읽기 오류")
+        else:
+            st.write("❌ 사용자 데이터 파일 없음")
+
+        if scores_exists:
             st.write("✅ 점수 데이터 파일 존재")
+            try:
+                scores_data = load_scores()
+                total_records = sum(len(v) for v in scores_data.values())
+                st.write(f"   총 기록: {total_records}건")
+            except:
+                st.write("   ⚠️ 파일 읽기 오류")
+        else:
+            st.write("❌ 점수 데이터 파일 없음")
+
+        # 강제 새로고침
+        if st.button("🔄 데이터 새로고침"):
+            st.rerun()
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -57,8 +82,15 @@ def save_scores(scores):
     try:
         with open(SCORES_FILE, "w", encoding="utf-8") as f:
             json.dump(scores, f, indent=2, ensure_ascii=False)
+        # 저장 확인
+        if SCORES_FILE.exists():
+            return True
+        else:
+            st.error("점수 파일 저장 실패: 파일이 생성되지 않음")
+            return False
     except Exception as e:
         st.error(f"점수 데이터 저장 오류: {e}")
+        return False
 
 def register_user(username, password):
     users = load_users()
@@ -81,13 +113,28 @@ def save_score(username, score, accuracy):
         scores = load_scores()
         if username not in scores:
             scores[username] = []
-        scores[username].append({
+
+        new_record = {
             "score": score,
             "accuracy": accuracy,
             "timestamp": datetime.now().isoformat()
-        })
-        save_scores(scores)
-        return True
+        }
+        scores[username].append(new_record)
+
+        # 저장
+        result = save_scores(scores)
+
+        if result:
+            # 저장 확인: 다시 읽어서 확인
+            verify_scores = load_scores()
+            if username in verify_scores and len(verify_scores[username]) > 0:
+                st.success("✅ 점수가 저장되었습니다!")
+                return True
+            else:
+                st.error("⚠️ 점수 저장 확인 실패")
+                return False
+        else:
+            return False
     except Exception as e:
         st.error(f"점수 저장 오류: {e}")
         return False
