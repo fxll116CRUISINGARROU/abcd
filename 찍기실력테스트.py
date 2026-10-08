@@ -99,24 +99,28 @@ def get_ranking():
         if score_list:
             best_score = max([s["score"] for s in score_list])
             avg_accuracy = sum([s["accuracy"] for s in score_list]) / len(score_list)
+            # 효율성 = 평균정확도 ÷ 시도횟수 (시도대비 정확도)
+            efficiency = avg_accuracy / len(score_list)
             # 첫 시도 시간 (가장 오래된 시도)
             first_attempt_time = score_list[0].get("timestamp", "")
             ranking.append({
                 "username": username,
                 "best_score": best_score,
                 "avg_accuracy": avg_accuracy,
+                "efficiency": efficiency,
                 "attempts": len(score_list),
                 "first_attempt_time": first_attempt_time
             })
-    # 정렬 기준: 1) 최고점 (높음), 2) 평균정확도 (높음), 3) 첫시도시간 (빠름)
+    # 정렬 기준: 1) 최고점 (높음), 2) 효율성 (높음), 3) 첫시도시간 (빠름)
     return sorted(
         ranking,
-        key=lambda x: (-x["best_score"], -x["avg_accuracy"], x["first_attempt_time"])
+        key=lambda x: (-x["best_score"], -x["efficiency"], x["first_attempt_time"])
     )
 
 def display_ranking():
     """랭킹 표시"""
     st.subheader("🏆 전체 랭킹")
+    st.caption("정렬 기준: 최고점 → 효율성(정확도÷시도) → 먼저한사람")
     ranking = get_ranking()
     if ranking:
         for idx, rank in enumerate(ranking, 1):
@@ -129,14 +133,16 @@ def display_ranking():
             else:
                 medal = f"{idx}."
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
                 st.write(f"{medal} {rank['username']}")
             with col2:
                 st.write(f"최고점: {rank['best_score']}")
             with col3:
-                st.write(f"평균정확도: {rank['avg_accuracy']:.1f}%")
+                st.write(f"효율성: {rank['efficiency']:.4f}")
             with col4:
+                st.write(f"평균: {rank['avg_accuracy']:.1f}%")
+            with col5:
                 st.write(f"시도: {rank['attempts']}회")
     else:
         st.info("아직 기록이 없습니다.")
